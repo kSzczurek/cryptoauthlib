@@ -62,7 +62,7 @@ ATCADevice TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_create(const cha
     iface_cfg->atcahid.packetsize    = 64;
     iface_cfg->atcahid.path          = path_copy;
 
-    ATCA_STATUS init_status = atcab_init_ext(&dev, &cfg_atsha20xa_kithid_default);
+    ATCA_STATUS init_status = atcab_init_ext(&dev, iface_cfg);
 
     if (init_status != ATCA_SUCCESS)
     {
