@@ -30,7 +30,7 @@ ATCADevice TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_create(const cha
     }
 
     size_t path_len = strlen(path);
-    path_copy = (char*)calloc(path_len, sizeof(path[0U]));
+    path_copy = (char*)hal_malloc(path_len + 1U);
 
     if (path_copy == NULL)
     {
@@ -38,7 +38,7 @@ ATCADevice TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_create(const cha
         goto error;
     }
 
-    iface_cfg = (ATCAIfaceCfg*)malloc(sizeof(ATCAIfaceCfg));
+    iface_cfg = (ATCAIfaceCfg*)hal_malloc(sizeof(ATCAIfaceCfg));
 
     if (iface_cfg == NULL)
     {
@@ -73,8 +73,8 @@ ATCADevice TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_create(const cha
     return dev;
 
 error:
-    free(path_copy);
-    free(iface_cfg);
+    hal_free(path_copy);
+    hal_free(iface_cfg);
     atcab_release_ext(&dev);
     return NULL;
 }
@@ -85,10 +85,10 @@ void TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_destroy(ATCADevice dev
     {
         if (dev->mIface.mIfaceCFG->atcahid.path != NULL)
         {
-            free(dev->mIface.mIfaceCFG->atcahid.path);
+            hal_free(dev->mIface.mIfaceCFG->atcahid.path);
         }
 
-        free(dev->mIface.mIfaceCFG);
+        hal_free(dev->mIface.mIfaceCFG);
     }
 
     atcab_release_ext(&dev);
