@@ -317,6 +317,8 @@ include_directories(cryptoauth PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
                                       ../third_party/hidapi/hidapi 
                                       ${USB_INCLUDE_DIR})
 
+include(${CMAKE_CURRENT_LIST_DIR}/../toolkit/toolkit.cmake)
+
 if(ATCA_MBEDTLS)
 target_link_libraries(cryptoauth mbedtls)
 endif()

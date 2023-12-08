@@ -150,9 +150,10 @@ typedef struct
             int         idx;           // HID enumeration index
             ATCAKitType dev_interface; // Kit interface type
             uint8_t     dev_identity;  // I2C address for the I2C interface device or the bus number for the SWI interface device.
-            uint32_t    vid;           // Vendor ID of kit (0x03EB for CK101)
-            uint32_t    pid;           // Product ID of kit (0x2312 for CK101)
+            uint16_t    vid;           // Vendor ID of kit (0x03EB for CK101)
+            uint16_t    pid;           // Product ID of kit (0x2312 for CK101)
             uint32_t    packetsize;    // Size of the USB packet
+            const char* path;          // Device path
         } atcahid;
 
         struct

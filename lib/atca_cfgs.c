@@ -101,6 +101,7 @@ ATCAIfaceCfg cfg_ateccx08a_kithid_default = {
         .atcahid.vid             = 0x03EB,
         .atcahid.pid             = 0x2312,
         .atcahid.packetsize      = 64,
+        .atcahid.path            = NULL
     }
 };
 #endif
@@ -169,6 +170,7 @@ ATCAIfaceCfg cfg_atsha20xa_kithid_default = {
         .atcahid.vid           = 0x03EB,
         .atcahid.pid           = 0x2312,
         .atcahid.packetsize    = 64,
+        .atcahid.path          = NULL
     },
     .rx_retries                = 1
 };

@@ -59,7 +59,14 @@ ATCA_STATUS hal_kit_hid_init(ATCAIface iface, ATCAIfaceCfg* cfg)
 #endif
     (void)hid_init();
 
-    iface->hal_data = hid_open((uint16_t)(ATCA_IFACECFG_VALUE(cfg, atcahid.vid) & UINT16_MAX), (uint16_t)(ATCA_IFACECFG_VALUE(cfg, atcahid.pid) & UINT16_MAX), NULL);
+    if (ATCA_IFACECFG_VALUE(cfg, atcahid.path) == NULL)
+    {
+        iface->hal_data = hid_open((uint16_t)(ATCA_IFACECFG_VALUE(cfg, atcahid.vid) & UINT16_MAX), (uint16_t)(ATCA_IFACECFG_VALUE(cfg, atcahid.pid) & UINT16_MAX), NULL);
+    }
+    else
+    {
+        iface->hal_data = hid_open_path(ATCA_IFACECFG_VALUE(cfg, atcahid.path));
+    }
 
     return (NULL != iface->hal_data) ? ATCA_SUCCESS : ATCA_COMM_FAIL;
 }
