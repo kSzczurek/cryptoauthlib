@@ -85,7 +85,7 @@ void TK_API_EXPORT TK_API_CALL tk_atca_hid_device_factory_destroy(ATCADevice dev
     {
         if (dev->mIface.mIfaceCFG->atcahid.path != NULL)
         {
-            hal_free(dev->mIface.mIfaceCFG->atcahid.path);
+            hal_free((char*)dev->mIface.mIfaceCFG->atcahid.path);
         }
 
         hal_free(dev->mIface.mIfaceCFG);
