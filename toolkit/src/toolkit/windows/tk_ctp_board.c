@@ -270,14 +270,15 @@ static void* tk_ctp_board_int_hid_get_device_interface_property(const char* inte
     if (cr != CR_SUCCESS)
     {
         tk_api_log_int_error("tk_ctp_board_int_hid_get_device_interface_property: failed with cr: %d for %s", cr, interface_path);
-        free(property_value);
-        property_value = NULL;
         goto error;
     }
 
-error:
-    free(wpath);
     return property_value;
+
+error:
+    free(property_value);
+    free(wpath);
+    return NULL;
 }
 
 static void* tk_ctp_board_int_hid_get_devnode_property(DEVINST dev_node, const DEVPROPKEY* property_key, DEVPROPTYPE expected_property_type)
