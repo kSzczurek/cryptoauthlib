@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 #include "tk_api_log_int.h"
 
