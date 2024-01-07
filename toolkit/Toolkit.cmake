@@ -30,7 +30,7 @@ if (WIN32)
             ${CMAKE_CURRENT_LIST_DIR}/src/toolkit/windows/tk_ctp_board.c
     )
 
-    target_link_libraries(cryptoauth cfgmgr32.lib legacy_stdio_definitions.lib)
+    target_link_libraries(cryptoauth cfgmgr32.lib)
 else()
     message(WARNING "Enumeration of CryptoAuth Trust Platform boards currently supported only on \{ WIN32 \} platform(s) !")
 endif()
