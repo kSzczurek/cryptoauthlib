@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "tk_api_log_int.h"
+#include "atca_debug.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -36,6 +37,8 @@ void tk_api_log_int_error(const char* fmt, ...)
     f_tk_api_log_int_last_error_buffer[TK_API_LOG_INT_LAST_ERROR_MAX_LEN] = '\0';
 
     va_end(args);
+
+    ATCA_TRACE(ATCA_GEN_FAIL, &f_tk_api_log_int_last_error_buffer[0U]);
 }
 
 
