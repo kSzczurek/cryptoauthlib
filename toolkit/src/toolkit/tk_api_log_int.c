@@ -8,6 +8,7 @@
 
 #include "tk_api_log_int.h"
 #include "atca_debug.h"
+#include "cryptoauthlib.h"
 
 #ifdef __cplusplus
 extern "C"

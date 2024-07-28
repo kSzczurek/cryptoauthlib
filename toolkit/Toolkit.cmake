@@ -21,6 +21,7 @@ target_include_directories(cryptoauth
 target_sources(cryptoauth
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/toolkit/tk_api_log_int.c
+        ${CMAKE_CURRENT_LIST_DIR}/src/toolkit/tk_atca_debug.c
         ${CMAKE_CURRENT_LIST_DIR}/src/toolkit/tk_atca_hid_device_factory.c
 )
 

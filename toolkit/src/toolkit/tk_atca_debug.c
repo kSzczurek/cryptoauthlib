@@ -34,13 +34,13 @@ void TK_API_EXPORT TK_API_CALL tk_atca_debug_init_trace(const char* trace_file_p
     errno = 0;
     f_p_trace_file = fopen(trace_file_path, "w");
 
-    if (p_trace_tile == NULL)
+    if (f_p_trace_file == NULL)
     {
         tk_api_log_int_error("tk_atca_debug_init_trace: failed to open file errno=%d", errno);
     }
     else
     {
-        atca_trace_config(p_trace_tile);
+        atca_trace_config(f_p_trace_file);
     }
 }
 
