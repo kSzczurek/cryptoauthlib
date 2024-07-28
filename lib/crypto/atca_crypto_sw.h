@@ -56,7 +56,7 @@ typedef struct atcac_sha1_ctx
 struct atcac_sha1_ctx;
 #endif
 
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_sha1_ctx * atcac_sha1_ctx_new(void);
 void atcac_sha1_ctx_free(struct atcac_sha1_ctx * ctx);
 #endif
@@ -77,7 +77,7 @@ typedef struct atcac_sha2_256_ctx
 struct atcac_sha2_256_ctx;
 #endif
 
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_sha2_256_ctx * atcac_sha256_ctx_new(void);
 void atcac_sha256_ctx_free(struct atcac_sha2_256_ctx * ctx);
 #endif
@@ -100,7 +100,7 @@ typedef struct atcac_hmac_ctx
 struct atcac_hmac_ctx;
 #endif
 
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_hmac_ctx * atcac_hmac_ctx_new(void);
 void atcac_hmac_ctx_free(struct atcac_hmac_ctx * ctx);
 #endif
@@ -114,7 +114,7 @@ ATCA_STATUS atcac_sha256_hmac_finish(struct atcac_hmac_ctx* ctx, uint8_t* digest
 
 #if ATCAC_AES_CMAC_EN
 struct atcac_aes_cmac_ctx;
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_aes_cmac_ctx * atcac_aes_cmac_ctx_new(void);
 void atcac_aes_cmac_ctx_free(struct atcac_aes_cmac_ctx * ctx);
 #endif
@@ -127,7 +127,7 @@ ATCA_STATUS atcac_aes_cmac_finish(struct atcac_aes_cmac_ctx* ctx, uint8_t* cmac,
 
 #if ATCAC_AES_GCM_EN
 struct atcac_aes_gcm_ctx;
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_aes_gcm_ctx * atcac_aes_gcm_ctx_new(void);
 void atcac_aes_gcm_ctx_free(struct atcac_aes_gcm_ctx * ctx);
 #endif
@@ -143,7 +143,6 @@ ATCA_STATUS atcac_aes_gcm_decrypt(struct atcac_aes_gcm_ctx* ctx, const uint8_t* 
                                   uint8_t* plaintext, const uint8_t* tag, size_t tag_len, const uint8_t* aad,
                                   const size_t aad_len, bool* is_verified);
 
-#if ATCAC_AES_GCM_UPDATE_EN
 ATCA_STATUS atcac_aes_gcm_aad_update(struct atcac_aes_gcm_ctx* ctx, const uint8_t* aad, const size_t aad_len);
 ATCA_STATUS atcac_aes_gcm_encrypt_update(struct atcac_aes_gcm_ctx* ctx, const uint8_t* plaintext, const size_t pt_len,
                                          uint8_t* ciphertext, size_t* ct_len);
@@ -152,13 +151,12 @@ ATCA_STATUS atcac_aes_gcm_decrypt_update(struct atcac_aes_gcm_ctx* ctx, const ui
                                          uint8_t* plaintext, size_t* pt_len);
 ATCA_STATUS atcac_aes_gcm_decrypt_finish(struct atcac_aes_gcm_ctx* ctx, const uint8_t* tag, size_t tag_len,
                                          bool* is_verified);
-#endif /* ATCAC_AES_GCM_UPDATE_EN */
 
 #endif /* ATCAC_AES_GCM_EN */
 
 #if ATCAC_PKEY_EN
 struct atcac_pk_ctx;
-#if defined(ATCA_BUILD_SHARED_LIBS) || !defined(ATCA_NO_HEAP)
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
 struct atcac_pk_ctx * atcac_pk_ctx_new(void);
 void atcac_pk_ctx_free(struct atcac_pk_ctx * ctx);
 #endif
@@ -176,6 +174,25 @@ ATCA_STATUS atcac_pk_derive(struct atcac_pk_ctx* private_ctx, struct atcac_pk_ct
 ATCA_STATUS atcac_pbkdf2_sha256(const uint32_t iter, const uint8_t* password, const size_t password_len,
                                 const uint8_t* salt, const size_t salt_len, uint8_t* result, size_t result_len);
 #endif
+
+#if defined(HOSTLIB_CERT_EN)
+#if HOSTLIB_CERT_EN
+#include "cal_buffer.h"
+struct atcac_x509_ctx;
+
+ATCA_STATUS atcac_parse_der(struct atcac_x509_ctx ** cert, cal_buffer *der);
+ATCA_STATUS atcac_get_subject(const struct atcac_x509_ctx* cert, cal_buffer* cert_subject);
+ATCA_STATUS atcac_get_subj_public_key(const struct atcac_x509_ctx * cert, cal_buffer * subj_public_key);
+ATCA_STATUS atcac_get_subj_key_id(const struct atcac_x509_ctx * cert, cal_buffer * subj_public_key_id);
+ATCA_STATUS atcac_get_issue_date(const struct atcac_x509_ctx * cert, cal_buffer * not_before, uint8_t * fmt);
+ATCA_STATUS atcac_get_expire_date(const struct atcac_x509_ctx * cert, cal_buffer * not_after, uint8_t * fmt);
+ATCA_STATUS atcac_get_cert_sn(const struct atcac_x509_ctx * cert, cal_buffer * cert_sn);
+ATCA_STATUS atcac_get_issuer(const struct atcac_x509_ctx* cert, cal_buffer* issuer_buf);
+ATCA_STATUS atcac_get_auth_key_id(const struct atcac_x509_ctx * cert, cal_buffer * auth_key_id);
+void atcac_x509_free(void* cert);
+
+#endif /* HOSTLIB_CERT_EN */
+#endif /* defined(HOSTLIB_CERT_EN) */
 
 #ifdef __cplusplus
 }

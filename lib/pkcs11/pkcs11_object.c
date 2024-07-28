@@ -25,6 +25,7 @@
  * THIS SOFTWARE.
  */
 #include "cryptoauthlib.h"
+#include "atcacert/atcacert_def.h"
 
 #include "cryptoki.h"
 #include "pkcs11_config.h"
@@ -90,19 +91,19 @@ const CK_ULONG pkcs11_object_monotonic_attributes_count = (CK_ULONG)(PKCS11_UTIL
  */
 const pkcs11_attrib_model const pkcs11_object_storage_attributes[] = {
     /** Object Class - CK_OBJECT_CLASS */
-    { CKA_CLASS,       pkcs11_object_get_class                         },
+    { CKA_CLASS,       pkcs11_object_get_class    },
     /** CK_TRUE if object is a token object; CK_FALSE if object is a session object. Default is CK_FALSE. */
-    { CKA_TOKEN,       pkcs11_attrib_true                              },
+    { CKA_TOKEN,       pkcs11_attrib_true         },
     /** CK_TRUE if object is a private object; CK_FALSE if object is a public object. */
-    { CKA_PRIVATE,     pkcs11_key_get_access_type                      },
+    { CKA_PRIVATE,     pkcs11_key_get_access_type },
     /** CK_TRUE if object can be modified. Default is CK_TRUE. */
-    { CKA_MODIFIABLE,  NULL_PTR                                        },
+    { CKA_MODIFIABLE,  NULL_PTR                   },
     /** Description of the object(default empty). */
-    { CKA_LABEL,       pkcs11_object_get_name                          },
+    { CKA_LABEL,       pkcs11_object_get_name     },
     /** CK_TRUE if object can be copied using C_CopyObject.Defaults to CK_TRUE. */
-    { CKA_COPYABLE,    pkcs11_attrib_false                             },
+    { CKA_COPYABLE,    pkcs11_attrib_false        },
     /** CK_TRUE if the object can be destroyed using C_DestroyObject. Default is CK_TRUE. */
-    { CKA_DESTROYABLE, pkcs11_attrib_false                             },
+    { CKA_DESTROYABLE, pkcs11_attrib_false        },
 };
 
 /**
@@ -111,11 +112,11 @@ const pkcs11_attrib_model const pkcs11_object_storage_attributes[] = {
  */
 const pkcs11_attrib_model pkcs11_object_data_attributes[] = {
     /** Description of the application that manages the object(default empty) */
-    { CKA_APPLICATION, NULL_PTR                        },
+    { CKA_APPLICATION, NULL_PTR },
     /** DER - encoding of the object identifier indicating the data object type(default empty) */
-    { CKA_OBJECT_ID,   NULL_PTR                        },
+    { CKA_OBJECT_ID,   NULL_PTR },
     /** Value of the object(default empty) */
-    { CKA_VALUE,       NULL_PTR                        }
+    { CKA_VALUE,       NULL_PTR }
 
 };
 #endif
@@ -190,25 +191,27 @@ CK_RV pkcs11_object_free(pkcs11_object_ptr pObject)
 
     if (NULL != pObject)
     {
-#if ATCA_CA_SUPPORT
         if (NULL != pObject->data)
         {
+            if (PKCS11_OBJECT_FLAG_CERT_CACHE == (pObject->flags & PKCS11_OBJECT_FLAG_CERT_CACHE))
+            {
+                (void)pkcs11_cert_clear_object_cache(pObject);
+                pObject->flags &= PKCS11_OBJECT_FLAG_CERT_CACHE_COMPLEMENT;
+            }
+            if (PKCS11_OBJECT_FLAG_KEY_CACHE == (pObject->flags & PKCS11_OBJECT_FLAG_KEY_CACHE))
+            {
+                (void)pkcs11_key_clear_object_cache(pObject);
+                pObject->flags &= PKCS11_OBJECT_FLAG_KEY_CACHE_COMPLEMENT;
+            }
             if (PKCS11_OBJECT_FLAG_SENSITIVE == (pObject->flags & PKCS11_OBJECT_FLAG_SENSITIVE))
             {
                 (void)pkcs11_util_memset((CK_VOID_PTR)pObject->data, pObject->size, 0, pObject->size);
             }
-#ifndef ATCA_NO_HEAP
-            if ((NULL != pObject->data) && (PKCS11_OBJECT_FLAG_DYNAMIC == (pObject->flags & PKCS11_OBJECT_FLAG_DYNAMIC)))
-            {
-                pkcs11_os_free(pObject->data);
-            }
-#endif
         }
-#endif
 
         (void)pkcs11_util_memset(pObject, sizeof(pkcs11_object), 0, sizeof(pkcs11_object));
 
-#ifndef ATCA_NO_HEAP
+#ifdef ATCA_HEAP
         pkcs11_os_free(pObject);
 #endif
     }
@@ -402,7 +405,7 @@ CK_RV pkcs11_object_find(CK_SLOT_ID slotId, pkcs11_object_ptr *ppObject, CK_ATTR
 {
     CK_ULONG i;
     CK_ATTRIBUTE_PTR pName = NULL;
-    CK_OBJECT_CLASS class = CKO_PRIVATE_KEY; /* Unless specified assume private key object */
+    CK_OBJECT_CLASS class = CKO_PRIVATE_KEY;    /* Unless specified assume private key object */
 
     if (NULL == ppObject || NULL == pTemplate || 0u == ulCount)
     {
@@ -454,19 +457,23 @@ CK_RV pkcs11_object_find(CK_SLOT_ID slotId, pkcs11_object_ptr *ppObject, CK_ATTR
  * \brief Create a new object on the token in the specified session using the given attribute template
  */
 CK_RV pkcs11_object_create(
-    CK_SESSION_HANDLE    hSession,
-    CK_ATTRIBUTE_PTR     pTemplate,
-    CK_ULONG             ulCount,
-    CK_OBJECT_HANDLE_PTR phObject)
+    CK_SESSION_HANDLE       hSession,
+    CK_ATTRIBUTE_PTR        pTemplate,
+    CK_ULONG                ulCount,
+    CK_OBJECT_HANDLE_PTR    phObject)
 {
     CK_RV rv;
     pkcs11_object_ptr pObject = NULL;
     CK_ATTRIBUTE_PTR pLabel = NULL;
     CK_OBJECT_CLASS_PTR pClass = NULL;
     CK_ATTRIBUTE_PTR pData = NULL;
+    CK_KEY_TYPE *pKeyType = NULL;
+    CK_ATTRIBUTE_PTR pEC_OID_Data = NULL;
     CK_ULONG i;
     pkcs11_lib_ctx_ptr pLibCtx = NULL;
     pkcs11_session_ctx_ptr pSession = NULL;
+    CK_ULONG ecKeyTableIdx = 0;
+    CK_BBOOL OidMatched = false;
 
     rv = pkcs11_init_check(&pLibCtx, FALSE);
     if (CKR_OK != rv)
@@ -491,16 +498,38 @@ CK_RV pkcs11_object_create(
         case CKA_CLASS:
             pClass = pTemplate[i].pValue;
             break;
+        case CKA_KEY_TYPE:
+            pKeyType = pTemplate[i].pValue;
+            break;
         case CKA_VALUE:
-        /* fall-through */
         case CKA_EC_POINT:
             pData = &pTemplate[i];
             break;
-        default:
-            pLabel = NULL;
-            pClass = NULL;
-            pData = NULL;
+        case CKA_EC_PARAMS:
+            pEC_OID_Data = &pTemplate[i];
             break;
+        default:
+            break;
+        }
+    }
+
+    //Data to be supplied by user for the certificate/ecc key object data to be written to device
+    if (NULL == pData)
+    {
+        return CKR_TEMPLATE_INCOMPLETE;
+    }
+
+    if (CKO_PUBLIC_KEY == *pClass || CKO_PRIVATE_KEY == *pClass)
+    {
+        //Mandatory attributes for ECC KEY objects as per PKCS11 v2.40 standards
+        if (NULL == pKeyType || NULL == pEC_OID_Data)
+        {
+            return CKR_TEMPLATE_INCOMPLETE;
+        }
+
+        if (CKK_EC != *pKeyType)
+        {
+            return CKR_TEMPLATE_INCONSISTENT;
         }
     }
 
@@ -509,7 +538,8 @@ CK_RV pkcs11_object_create(
         if (NULL != pLabel && NULL != pClass)
         {
             if (CKR_OK != (rv = pkcs11_object_find(pSession->slot->slot_id, &pObject, pTemplate, ulCount)))
-            {
+            {   
+                (void)pkcs11_unlock_context(pLibCtx);
                 return rv;
             }
         }
@@ -527,66 +557,104 @@ CK_RV pkcs11_object_create(
 
         if (NULL != pObject)
         {
+            CK_ULONG ecKeyTableSz = 0u;
+            if (CKO_PUBLIC_KEY == *pClass || CKO_PRIVATE_KEY == *pClass)
+            {
+                ecKeyTableSz = sizeof(ec_key_data_table) / sizeof(ec_key_data_table[0]);
+                for (i = 0; i < ecKeyTableSz; i++)
+                {
+                    /* coverity[misra_c_2012_rule_21_16_violation:FALSE] CK_VOID_PTR is a pointer type */
+                    if ((0 == memcmp(pEC_OID_Data->pValue, ec_key_data_table[i].curve_oid, pEC_OID_Data->ulValueLen)))
+                    {
+                        //Key OID matched and we got the private key type
+                        ecKeyTableIdx = i;
+                        OidMatched = true;
+                        break;
+                    }
+                }
+            }
+ 
+            ATCADeviceType dev_type = atcab_get_device_type_ext(pSession->slot->device_ctx);
+
             switch (*pClass)
             {
-            case CKO_CERTIFICATE:
-                rv = pkcs11_config_cert(pLibCtx, pSession->slot, pObject, pLabel);
-                if (CKR_OK == rv)
-                {
-                    if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
+                case CKO_CERTIFICATE:
+                    rv = pkcs11_config_cert(pLibCtx, pSession->slot, pObject, pLabel);
+                    if (CKR_OK == rv)
                     {
-                        rv = pkcs11_cert_x509_write(pObject, pData, pSession);
-                        (void)pkcs11_unlock_device(pLibCtx);
-                    }
-                }
-                break;
-            case CKO_PUBLIC_KEY:
-                pObject->class_id = CKO_PUBLIC_KEY;
-                if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
-                {
-                    if (CKR_OK == (rv = pkcs11_config_key(pLibCtx, pSession->slot, pObject, pLabel)))
-                    {
-                        rv = pkcs11_key_write(pSession, pObject, pData);
-                        if (CKR_OK != rv)
+                        if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
                         {
-#if !PKCS11_USE_STATIC_CONFIG
-                            (void)pkcs11_config_remove_object(pLibCtx, pSession->slot, pObject);
-#endif
+                            rv = pkcs11_cert_x509_write(pObject, pData, pSession);
+                            (void)pkcs11_unlock_device(pLibCtx);
                         }
                     }
-                    (void)pkcs11_unlock_device(pLibCtx);
-                }
-                break;
-            case CKO_PRIVATE_KEY:
-                pObject->class_id = CKO_PRIVATE_KEY;
+                    break;
+                case CKO_PUBLIC_KEY:
+                    if (true == OidMatched)
+                    {  
+                        pObject->class_id = CKO_PUBLIC_KEY;
 
+                        if(atcab_is_ta_device(dev_type))
+                        {   
 #if ATCA_TA_SUPPORT
-                (void)talib_handle_init_private_key(&pObject->handle_info, TA_KEY_TYPE_ECCP256,
+                            (void)talib_handle_init_public_key(&pObject->handle_info, ec_key_data_table[ecKeyTableIdx].ec_key_type,
+                                                   TA_ALG_MODE_ECC_ECDSA, TA_PROP_NO_SIGN_GENERATION,
+                                                   TA_PROP_NO_KEY_AGREEMENT);
+#endif
+                        }
+                        if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
+                        {
+                            if (CKR_OK == (rv = pkcs11_config_key(pLibCtx, pSession->slot, pObject, pLabel)))
+                            {
+                                rv = pkcs11_key_write(pSession, pObject, pData, &ec_key_data_table[ecKeyTableIdx]);
+                                if (CKR_OK != rv)
+                                {
+#if !PKCS11_USE_STATIC_CONFIG
+                                    (void)pkcs11_config_remove_object(pLibCtx, pSession->slot, pObject);
+#endif
+                                }
+                            }
+                            (void)pkcs11_unlock_device(pLibCtx);
+                        }
+                    }
+                    break;
+                case CKO_PRIVATE_KEY:
+                    if (true == OidMatched)
+                    {
+                        pObject->class_id = CKO_PRIVATE_KEY;
+
+                        if(atcab_is_ta_device(dev_type))
+                        {
+                        
+#if ATCA_TA_SUPPORT
+                            (void)talib_handle_init_private_key(&pObject->handle_info, ec_key_data_table[ecKeyTableIdx].ec_key_type,
                                                     TA_ALG_MODE_ECC_ECDSA, TA_PROP_SIGN_INT_EXT_DIGEST,
                                                     TA_PROP_NO_KEY_AGREEMENT);
-                /* coverity[cert_int31_c_violation] signed to unsigned casting */
-                pObject->handle_info.property &= (uint16_t)(~TA_PROP_EXECUTE_ONLY_KEY_GEN_MASK);
-#endif
-                if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
-                {
-                    if (CKR_OK == (rv = pkcs11_config_key(pLibCtx, pSession->slot, pObject, pLabel)))
-                    {
-                        rv = pkcs11_key_write(pSession, pObject, pData);
-                        if (CKR_OK != rv)
-                        {
+                            /* coverity[cert_int31_c_violation] signed to unsigned casting */
+                            pObject->handle_info.property &= (uint16_t)(~TA_PROP_EXECUTE_ONLY_KEY_GEN_MASK);
+#endif              
+                            if (CKR_OK == (rv = pkcs11_lock_device(pLibCtx)))
+                            {
+                                if (CKR_OK == (rv = pkcs11_config_key(pLibCtx, pSession->slot, pObject, pLabel)))
+                                {
+                                    rv = pkcs11_key_write(pSession, pObject, pData, &ec_key_data_table[ecKeyTableIdx]);
+                                    if (CKR_OK != rv)
+                                    {
 #if !PKCS11_USE_STATIC_CONFIG
-                            (void)pkcs11_config_remove_object(pLibCtx, pSession->slot, pObject);
-#endif
+                                        (void)pkcs11_config_remove_object(pLibCtx, pSession->slot, pObject);
+#endif                      
+                                    }
+                                }
+                                (void)pkcs11_unlock_device(pLibCtx);
+                            }
                         }
                     }
-                    (void)pkcs11_unlock_device(pLibCtx);
-                }
-                break;
-            default:
-                /* Do Nothing*/
-                break;
+                    break;
+                default:
+                    /* Do Nothing*/
+                    break;
             }
-
+    
             if (CKR_OK == rv)
             {
                 rv = pkcs11_object_get_handle(pObject, phObject);

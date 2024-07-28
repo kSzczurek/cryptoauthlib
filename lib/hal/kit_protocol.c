@@ -28,6 +28,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #include "atca_compiler.h"
 #include "kit_protocol.h"
 #include "atca_helpers.h"
@@ -95,6 +96,9 @@ const char * kit_id_from_devtype(ATCADeviceType devtype)
         break;
     case TA100:
         device_type = "TA100";
+        break;
+    case TA101:
+        device_type = "TA101";
         break;
     case ECC204:
         device_type = "ECC204";
@@ -317,7 +321,11 @@ ATCA_STATUS kit_phy_receive(ATCAIface iface, uint8_t* rxdata, int* rxsize)
         location = memchr(&rxdata[total_bytes_read], (int)'\n', (size_t)rxlen);
 
         total_bytes_read += rxlen;
-        bytes_to_read -= rxlen;
+
+        if (rxlen <= bytes_to_read)
+        {
+            bytes_to_read -= rxlen;
+        }
     }
 
     // Save the total bytes read
@@ -603,27 +611,29 @@ ATCA_STATUS kit_send(ATCAIface iface, uint8_t word_address, uint8_t* txdata, int
     ATCA_STATUS status = ATCA_SUCCESS;
     int nkitbuf;
     char* pkitbuf = NULL;
-    const char *target;
-
-    ((void)word_address);
-
-    // Check the pointers
-    if (txdata == NULL)
-    {
-        return ATCA_BAD_PARAM;
-    }
 
     do
     {
         // Wrap in kit protocol
-        /* coverity[cert_int32_c_violation:FALSE] txlength maximum value is controled by maximum supported packet size of the device */
-        nkitbuf = txlength * 2 + KIT_TX_WRAP_SIZE;
+        if(true == atcab_is_ta_device(iface->mIfaceCFG->devtype))
+        {
+            /* coverity[cert_int32_c_violation:FALSE] txlength maximum value is controled by maximum supported packet size of the device */
+            nkitbuf = (txlength + sizeof(word_address)) * 2 + KIT_TX_WRAP_SIZE;
+        }
+        else
+        {
+            /* coverity[cert_int32_c_violation:FALSE] txlength maximum value is controled by maximum supported packet size of the device */
+            nkitbuf = txlength * 2 + KIT_TX_WRAP_SIZE;
+        }
+
         pkitbuf = hal_malloc(nkitbuf > 0 ? (size_t)nkitbuf : 0u);
-        (void)memset(pkitbuf, 0, (size_t)nkitbuf);
 
-        target = kit_id_from_devtype(iface->mIfaceCFG->devtype);
+        if (NULL != pkitbuf)
+        {
+            (void)memset(pkitbuf, 0, (size_t)nkitbuf);
+        }
 
-        if (ATCA_SUCCESS != (status = kit_wrap_cmd(txdata, txlength, pkitbuf, &nkitbuf, target)))
+        if (ATCA_SUCCESS != (status = kit_wrap_cmd(iface, word_address, txdata, txlength, pkitbuf, &nkitbuf)))
         {
             status = ATCA_GEN_FAIL;
             break;
@@ -641,7 +651,7 @@ ATCA_STATUS kit_send(ATCAIface iface, uint8_t word_address, uint8_t* txdata, int
         }
 
         // Receive the reply to send "00()\n"
-        if (strncmp(target, "TA10x", 3) == 0)
+        if (true == atcab_is_ta_device(iface->mIfaceCFG->devtype))
         {
             status = kit_ta_receive_send_rsp(iface);
         }
@@ -670,7 +680,6 @@ ATCA_STATUS kit_receive(ATCAIface iface, uint8_t word_address, uint8_t* rxdata, 
     int nkitbuf = 0;
     int dataSize;
     char *pkitbuf = NULL;
-    const char* target;
 
     do
     {
@@ -681,8 +690,7 @@ ATCA_STATUS kit_receive(ATCAIface iface, uint8_t word_address, uint8_t* rxdata, 
             break;
         }
 
-        target = kit_id_from_devtype(iface->mIfaceCFG->devtype);
-        if (strncmp(target, "TA10x", 3) == 0)
+        if (true == atcab_is_ta_device(iface->mIfaceCFG->devtype))
         {
             // Send word address byte to kit protocol to receive a response from device
             if (ATCA_SUCCESS != (status = kit_ta_send_to_receive(iface, word_address, rxsize)))
@@ -698,7 +706,11 @@ ATCA_STATUS kit_receive(ATCAIface iface, uint8_t word_address, uint8_t* rxdata, 
         //coverity[misra_c_2012_rule_10_8_violation] this has been tested and confirmed to be correct for USB HID communication
         nkitbuf = (int)((((((*rxsize * 2u) + KIT_RX_WRAP_SIZE)) / 64u) + 1u) * 64u);
         pkitbuf = hal_malloc((size_t)nkitbuf);
-        (void)memset(pkitbuf, 0, (size_t)nkitbuf);
+
+        if (NULL != pkitbuf)
+        {
+            (void)memset(pkitbuf, 0, (size_t)nkitbuf);
+        }
 
         if (ATCA_SUCCESS != (status = kit_phy_receive(iface, (uint8_t*)pkitbuf, &nkitbuf)))
         {
@@ -711,7 +723,7 @@ ATCA_STATUS kit_receive(ATCAIface iface, uint8_t word_address, uint8_t* rxdata, 
         printf("Kit Read: %s\r", pkitbuf);
     #endif
 
-        // Unwrap from kit protocol
+        // Unwrap from kit protocol        
         dataSize = (int)*rxsize;
         *rxsize = 0;
         if (ATCA_SUCCESS != (status = kit_parse_rsp(pkitbuf, nkitbuf, kitstatus, rxdata, &dataSize)))
@@ -719,7 +731,7 @@ ATCA_STATUS kit_receive(ATCAIface iface, uint8_t word_address, uint8_t* rxdata, 
             break;
         }
 
-        *rxsize = (uint16_t)dataSize;
+        *rxsize = (uint16_t)(dataSize & UINT16_MAX);
 
     }
     while (false);
@@ -870,34 +882,48 @@ ATCA_STATUS kit_sleep(ATCAIface iface)
 }
 
 /** \brief Wrap binary bytes in ascii kit protocol
+ * \param[in]    iface        instance
+ * \param[in]    word_address Binary word address to wrap.
  * \param[in]    txdata   Binary data to wrap.
  * \param[in]    txlen    Length of binary data in bytes.
- * \param[out]   pkitcmd  ASCII kit protocol wrapped data is return here.
+ * \param[out]   pkitcmd  ASCII kit protocol wrapped data is returned here.
  * \param[in,out] nkitcmd  As input, the size of the pkitcmd buffer.
  *                        As output, the number of bytes returned in the
  *                        pkitcmd buffer.
- * \param[in]    target   Device type
  * \return ATCA_SUCCESS on success, otherwise an error code.
  */
-ATCA_STATUS kit_wrap_cmd(const uint8_t* txdata, int txlen, char* pkitcmd, int* nkitcmd, const char* target)
+ATCA_STATUS kit_wrap_cmd(ATCAIface iface, uint8_t word_address, const uint8_t* txdata, int txlen, char* pkitcmd, int* nkitcmd)
 {
     ATCA_STATUS status = ATCA_SUCCESS;
     const char* ta_cmdpre = "t:send(";
     const char* ca_cmdpre = "d:t(";
-    const char* cmdpre = (strncmp(target, "TA10x", 3) != 0) ? ca_cmdpre : ta_cmdpre;
+    const char* target = kit_id_from_devtype(iface->mIfaceCFG->devtype);
+    bool is_ta_device = (atcab_is_ta_device(iface->mIfaceCFG->devtype)) ? true : false;
+    const char* cmdpre = (atcab_is_ta_device(iface->mIfaceCFG->devtype)) ? ta_cmdpre : ca_cmdpre;
     char cmdpost[] = ")\n";
     size_t cpylen = 0U;
     size_t cpyindex = 0U;
+    size_t cmdlen = 0U;
 
     // Check the variables
-    if (txdata == NULL || pkitcmd == NULL || nkitcmd == NULL || (0 > txlen))
+    if (pkitcmd == NULL || nkitcmd == NULL || (0 > txlen))
     {
         return ATCA_BAD_PARAM;
     }
 
-    size_t cmdAsciiLen = (size_t)txlen * 2U;
-    /* coverity[cert_int30_c_violation:FALSE] None of these inputs can exceed SIZE_MAX */
-    size_t cmdlen = cmdAsciiLen + strlen(cmdpre) + sizeof(cmdpost) - 1U;
+    size_t wordaddr_cmdAsciiLen = (sizeof(word_address) * 2U);
+    size_t txdata_cmdAsciiLen = (size_t)txlen * 2U;
+
+    if(is_ta_device == true)
+    {
+        /* coverity[cert_int30_c_violation:FALSE] None of these inputs can exceed SIZE_MAX */
+        cmdlen = wordaddr_cmdAsciiLen + txdata_cmdAsciiLen + strlen(cmdpre) + sizeof(cmdpost) - 1U;
+    }
+    else
+    {
+        /* coverity[cert_int30_c_violation:FALSE] None of these inputs can exceed SIZE_MAX */
+        cmdlen = txdata_cmdAsciiLen + strlen(cmdpre) + sizeof(cmdpost) - 1U;
+    }
 
     /* coverity[cert_int31_c_violation:FALSE] cmdlen will never exceed INT_MAX */
     if (*nkitcmd < (int)cmdlen)
@@ -915,20 +941,36 @@ ATCA_STATUS kit_wrap_cmd(const uint8_t* txdata, int txlen, char* pkitcmd, int* n
 
     pkitcmd[0] = target[0];
 
-    // Copy the ascii binary bytes
-    if (ATCA_SUCCESS != (status = atcab_bin2hex_(txdata, (size_t)txlen, &pkitcmd[cpyindex], &cmdAsciiLen, false, false, true)))
+    if(is_ta_device == true)
     {
-        return status;
+        // Copy the ascii binary bytes
+        if (ATCA_SUCCESS != (status = atcab_bin2hex_(&word_address, sizeof(word_address), &pkitcmd[cpyindex], &wordaddr_cmdAsciiLen, false, false, true)))
+        {
+            return status;
+        }
+        cpyindex += wordaddr_cmdAsciiLen;
     }
-    cpyindex += cmdAsciiLen;
+
+    if(NULL != txdata && 0 < txlen)
+    {
+        // Copy the ascii binary bytes
+        if (ATCA_SUCCESS != (status = atcab_bin2hex_(txdata, (size_t)(txlen), &pkitcmd[cpyindex], &txdata_cmdAsciiLen, false, false, true)))
+        {
+            return status;
+        }
+        cpyindex += txdata_cmdAsciiLen;
+    }
 
     // Copy the postfix
     cpylen = strlen(cmdpost);
     (void)memcpy(&pkitcmd[cpyindex], cmdpost, cpylen);
-    /* coverity[cert_int30_c_violation:FALSE] cpyindex can never wrap because the input strings sizes are controled to a narrow range by the caller */
+    /* coverity[cert_int30_c_violation:FALSE] cpyindex can never wrap because the input strings sizes are controlled to a narrow range by the caller */
     cpyindex += cpylen;
 
-    *nkitcmd = (int)cpyindex;
+    if (cpyindex <= INT_MAX)
+    {
+        *nkitcmd = (int)cpyindex;
+    }
 
     return status;
 }

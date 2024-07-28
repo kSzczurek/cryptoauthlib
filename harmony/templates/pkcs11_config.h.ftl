@@ -74,6 +74,16 @@
 #define PKCS11_MAX_SESSIONS_ALLOWED     ${CAL_PKCS11_MAX_SESSIONS}
 #endif
 
+/** Maximum number of x509 certificates allowed to be cached for parsing */
+#ifndef PKCS11_MAX_CERTS_CACHED
+#define PKCS11_MAX_CERTS_CACHED      ${CAL_PKCS11_MAX_CERTS_CACHED}
+#endif
+
+/** Maximum number of Key ID's allowed to be cached*/
+#ifndef PKCS11_MAX_KEYS_CACHED
+#define PKCS11_MAX_KEYS_CACHED       ${PKCS11_MAX_KEYS_CACHED}
+#endif
+
 /** Maximum number of cryptographic objects allowed to be cached */
 #ifndef PKCS11_MAX_OBJECTS_ALLOWED
 #define PKCS11_MAX_OBJECTS_ALLOWED      ${CAL_PKCS11_MAX_OBJECTS}

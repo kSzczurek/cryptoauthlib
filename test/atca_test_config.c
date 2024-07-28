@@ -121,7 +121,7 @@ bool atca_test_cond_ecc608(void)
 }
 
 /** \brief Configured device is TA100 */
-bool atca_test_cond_ta100(void)
+bool atca_test_cond_ta(void)
 {
     return atcab_is_ta_device(atca_test_get_device_type());
 }
@@ -243,6 +243,11 @@ static int select_custom(int argc, char* argv[])
 #ifdef ATCA_TA100_SUPPORT
     case TA100:
         ret = select_ta100_custom(argc, argv);
+        break;
+#endif
+#ifdef ATCA_TA101_SUPPORT
+    case TA101:
+        ret = select_ta101_custom(argc, argv);
         break;
 #endif
     default:
@@ -406,10 +411,12 @@ static int opt_iface_i2c(int argc, char* argv[])
 
     if (1 < argc)
     {
+        ATCA_IFACECFG_VALUE(gCfg, atcai2c.baud) = (uint32_t)strtol(argv[1], NULL, 10);
+    }
+    else
+    {
 #ifdef __linux__
         ATCA_IFACECFG_VALUE(gCfg, atcai2c.baud) = 100000;
-#else
-        ATCA_IFACECFG_VALUE(gCfg, atcai2c.baud) = (uint32_t)strtol(argv[1], NULL, 10);
 #endif
     }
 

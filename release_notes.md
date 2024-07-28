@@ -1,6 +1,99 @@
 
 # Microchip Cryptoauthlib Release Notes
 
+## Release v3.7.5 (06/26/2024)
+
+### New Features
+  - In PKCS11 module, added ECCP384,ECCP521,ECCP224 elliptic curves support for 
+    ECC key operations, in addition to the existing ECCP256 support
+  - Enhanced certificate related tests to include coverage for ECC204 and TA010 devices
+  - Added a new ATCA_HEAP internal macro check in place of ATCA_NO_HEAP for dynamic memory usages  
+  - Added an additional test to validate AES-CBC encrypt/decrypt APIs using 
+    CAVP's AES multiblock message test (MMT) sample vectors
+  - See [talib/CHANGES.md] for details on talib module changes
+  
+### Fixes
+  - Fixed atcacert_get_comp_cert() API to support certificates with expiry dates beyond year 2031
+  - Fixed atcacert_read_cert() API to consider serial number as source while processing 
+    extracted certificates
+  - Fixed atcacert_write_cert() API to support X509 certificates with an odd byte length, 
+    without any additional padding
+  - Fixed calib_execute_send() to consider correct data buffer when ATCA_HAL_LEGACY_API is used
+  - PKCS11 layer fixes/updates
+    - Fixed certificate chain/key export failures in ECC608 Trust devices
+  	- Fixed memory leak during C_Finalize API call usage in a multi-slot configuration
+
+### API Changes
+  - Added atcacert_generate_sn() API in atcacert module to generate certificate serial number 
+    from a valid serial number source
+
+## Release v3.7.4 (03/08/2024)
+
+### New Features
+  - Updated wolfSSL interface `atcac` wrapper APIs usage for AES GCM encrypt/decrypt
+    similar to MbedTLS and openSSL library wrapper APIs
+  - Added package.yml file to support MPLAB Harmony metadata package format
+
+### Fixes
+  - Fixed calib_wakeup_i2c API to follow specified i2c wakeup sequence for ECC608 devices
+  - PKCS11 layer fixes/updates
+    - Lock usage optimization in pkcs11_find_continue API
+    - pkcs11_digest API updates for SHA context memory allocation
+    - pkcs11_token_set_pin API updates to write data based on generated GCM key size
+  - Fixed atcacert_get_comp_cert API to remove a redundant atcacert_date_enc_compcert call
+  - Resolved build warnings/issues in Windows, Linux and 8-bit (XC8) platforms
+  - wolfSSL's atcac_pk_init_pem wrapper API updates to use wc_ PEM to DER functions
+  - Fixed broken links in README.md files
+
+## Release v3.7.3 (01/31/2024)
+
+### New Features
+  - In PKCS11 module, added cache support to store `Key id` attribute of 
+    key type objects into stack memory and use it for subsequent accesses
+
+### Fixes
+  - Fixed calib_sha_hmac_finish api to set mode value correctly for 
+    ECC204, TA010 and ECC608 devices
+  - Fixed memory leak in MbedTLS configuration
+  - Fixed build errors when a project is generated with PKCS11 Component enabled in 
+    MPLAB Harmony Configurator (MHC)
+  
+## Release v3.7.2 (01/19/2024)
+
+### New Features
+  - See [talib/CHANGES.md] for details on talib module changes
+
+### Fixes
+  - Updated PKCS11 token info to list TA101 device details
+  - Fixed compilation errors when ECC508 device is enabled
+  - See [talib/CHANGES.md] for details on talib module fixes
+
+### API Changes
+  - Added sign and verfy API in talib module to support `1024 bytes ED25519 mode`
+
+## Release v3.7.1 (12/15/2023)
+
+### New Features
+  - PKCS11 module enhancements for x509 public key certificates
+    - Added more certificate attributes to x509 public key certificates.
+      These attributes include certificate start date, certificate end date, subject,
+      subject key, DER encoded certificate issuer name, DER encoded certificate
+      serial number and hash of the issuer public key.
+    - Added cache support to store these certificates into stack memory and utilize
+      it for parsing the above specified certificate attributes.
+  - See [talib/CHANGES.md] for details on talib module changes
+
+### Fixes
+  - Updated atcab_read_config_zone to support SHA106
+  - For Linux platforms, i2c baud rate is always set to 100 khz as the default configuration
+  - Resolved build errors when ATCA_USE_SHARED_MUTEX is disabled
+  - Resolved build error with ATCA_JWT_EN
+
+### API Changes
+  - Added atcacert_get_subject api to get the subject name from public x509 certificates
+  - Added atcacert_get_issuer api to get the issuer name from public x509 certificates
+  - Updated the atcacert_def_s structure to include x509 full certificates support
+
 ## Release v3.7.0 (09/08/2023)
 
 ### New Features
@@ -14,12 +107,12 @@
     party headers.
 
 ### API Changes
-  - The software crypto structures are generally no longer typedef'd so they must be 
-    declared with the `struct` keyword. New typedefs were added by appending the 
+  - The software crypto structures are generally no longer typedef'd so they must be
+    declared with the `struct` keyword. New typedefs were added by appending the
     suffix `_t` which allows for the same mechanism for declaring these structure in code
-    if building a standalone application (such as in embedded projects). If dynamically 
-    linking with the library and using a third party crypto library one will need to use 
-    the `_new` & `_free` APIs to allocate these structures for use with the `atcac` 
+    if building a standalone application (such as in embedded projects). If dynamically
+    linking with the library and using a third party crypto library one will need to use
+    the `_new` & `_free` APIs to allocate these structures for use with the `atcac`
     interfaces.
 
 ## Release v3.6.1 (07/14/2023)

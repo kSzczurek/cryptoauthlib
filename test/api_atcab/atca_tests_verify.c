@@ -238,7 +238,7 @@ TEST(atca_cmd_basic_test, verify_stored)
     TEST_ASSERT(!is_verified);
 }
 
-#if TEST_ATCAB_VERIFY_REQRANDOM_EN
+#if TEST_ATCAB_VERIFY_REQRANDOM_EN && ATCA_CA_SUPPORT
 TEST_CONDITION(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
 {
     ATCADeviceType dev_type = atca_test_get_device_type();
@@ -247,6 +247,7 @@ TEST_CONDITION(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
            || (ATECC508A == dev_type)
            || (ATECC608 == dev_type);
 }
+
 
 TEST(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
 {
@@ -266,7 +267,14 @@ TEST(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
     TEST_ASSERT_EQUAL(ATCA_SUCCESS, status);
 
 #if defined(ATCA_MBEDTLS) || defined(ATCA_OPENSSL) || defined(ATCA_WOLFSSL)
-    atcac_pk_ctx_t sign_ctx;
+    struct atcac_pk_ctx * sign_ctx;
+#if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
+    sign_ctx = atcac_pk_ctx_new();
+    TEST_ASSERT_NOT_NULL(sign_ctx);
+#else
+    atcac_pk_ctx_t sign_ctx_inst;
+    sign_ctx = &sign_ctx_inst;
+#endif
     uint8_t private_key_pem[] =
         "-----BEGIN EC PRIVATE KEY-----\n"
         "MHcCAQEEICFZhAyzqkUgyheo51bhg3mcp+qwfl+koE+Mhs/sRyzBoAoGCCqGSM49\n"
@@ -277,11 +285,11 @@ TEST(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
     size_t pubkey_len = sizeof(public_key);
 
     /* Initialization of a private key with a pem encoded key (without password) */
-    status = atcac_pk_init_pem(&sign_ctx, private_key_pem, sizeof(private_key_pem), false);
+    status = atcac_pk_init_pem(sign_ctx, private_key_pem, sizeof(private_key_pem), false);
     TEST_ASSERT_EQUAL(ATCA_SUCCESS, status);
 
     /* Retrieve the public key */
-    status = atcac_pk_public(&sign_ctx, public_key, &pubkey_len);
+    status = atcac_pk_public(sign_ctx, public_key, &pubkey_len);
     TEST_ASSERT_EQUAL(ATCA_SUCCESS, status);
 #else
     uint16_t private_key_id;
@@ -319,7 +327,7 @@ TEST(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
 
     // Sign the message
 #if defined(ATCA_MBEDTLS) || defined(ATCA_OPENSSL) || defined(ATCA_WOLFSSL)
-    status = atcac_pk_sign(&sign_ctx, nonce_params.temp_key->value, ATCA_SHA256_DIGEST_SIZE, signature, &sig_size);
+    status = atcac_pk_sign(sign_ctx, nonce_params.temp_key->value, ATCA_SHA256_DIGEST_SIZE, signature, &sig_size);
 #else
     // Only the 608 has the message digest buffer - other devices will invalidate tempkey
     status = atcab_sign(private_key_id, nonce_params.temp_key->value, signature);
@@ -331,6 +339,15 @@ TEST(atca_cmd_basic_test, verify_stored_on_reqrandom_set)
     status = atcab_verify_stored_with_tempkey(signature, public_key_id, &is_verified);
     TEST_ASSERT_EQUAL(ATCA_SUCCESS, status);
     TEST_ASSERT(is_verified);
+
+#if defined(ATCA_MBEDTLS) || defined(ATCA_OPENSSL) || defined(ATCA_WOLFSSL)
+    status = atcac_pk_free(sign_ctx);
+    TEST_ASSERT_EQUAL(ATCA_SUCCESS, status);
+
+    #if defined(ATCA_BUILD_SHARED_LIBS) || defined(ATCA_HEAP)
+        atcac_pk_ctx_free(sign_ctx);
+    #endif
+#endif
 }
 #endif /* TEST_ATCAB_VERIFY_REQRANDOM_EN */
 
@@ -704,7 +721,7 @@ t_test_case_info verify_basic_test_info[] =
 #endif /* TEST_ATCAB_VERIFY_EXTERN_EN */
 #if TEST_ATCAB_VERIFY_STORED_EN
     { REGISTER_TEST_CASE(atca_cmd_basic_test, verify_stored),       atca_test_cond_p256_sign_verify  },
-#if TEST_ATCAB_VERIFY_REQRANDOM_EN
+#if TEST_ATCAB_VERIFY_REQRANDOM_EN && ATCA_CA_SUPPORT
     { REGISTER_TEST_CASE(atca_cmd_basic_test, verify_stored_on_reqrandom_set), REGISTER_TEST_CONDITION(atca_cmd_basic_test, verify_stored_on_reqrandom_set) },
 #endif
 #if TEST_ATCAB_VERIFY_MAC_EN
